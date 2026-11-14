@@ -12,8 +12,8 @@ const PORT = process.env.PORT || 3000;
 const TURN_SECONDS = 30;
 
 // -------------------- Dictionary (vi.wiktionary.org) --------------------
-// Kiểm tra từ có tồn tại trên Wiktionary tiếng Việt và là DANH TỪ.
-// Dùng prop=sections: mỗi entry có các mục "==Tiếng Việt==" > "===Danh từ==="
+// Kiểm tra từ có tồn tại trên Wiktionary tiếng Việt và là DANH TỪ hoặc TÍNH TỪ.
+// Dùng prop=sections: mỗi entry có các mục "==Tiếng Việt==" > "===Danh từ==="/"===Tính từ==="
 const dictCache = new Map();
 
 async function checkWordOnline(word) {
@@ -39,11 +39,11 @@ async function checkWordOnline(word) {
       if (res.status !== 429 && res.status < 500) break;
       await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
     }
-    if (!res.ok) return { exists: null, isNoun: null, error: true };
+    if (!res.ok) return { exists: null, pos: null, error: true };
     const data = await res.json();
 
     if (data.error || !data.parse) {
-      result = { exists: false, isNoun: false };
+      result = { exists: false, pos: null };
     } else {
       const sections = data.parse.sections || [];
       const clean = (s) => String(s).replace(/<[^>]+>/g, '').trim();
@@ -53,17 +53,21 @@ async function checkWordOnline(word) {
       );
       if (!viSection) {
         // Trang tồn tại nhưng không có mục tiếng Việt -> không phải từ tiếng Việt
-        result = { exists: true, isNoun: false };
+        result = { exists: true, pos: null };
       } else {
         const prefix = viSection.number + '.';
-        const isNoun = sections.some(
-          (s) => String(s.number).startsWith(prefix) && /danh\s*từ/i.test(clean(s.line))
-        );
-        result = { exists: true, isNoun };
+        let pos = null;
+        for (const s of sections) {
+          if (!String(s.number).startsWith(prefix)) continue;
+          const line = clean(s.line);
+          if (/danh\s*từ/i.test(line)) { pos = 'danh từ'; break; }
+          if (/tính\s*từ/i.test(line)) pos = 'tính từ';
+        }
+        result = { exists: true, pos };
       }
     }
   } catch (e) {
-    return { exists: null, isNoun: null, error: true };
+    return { exists: null, pos: null, error: true };
   }
 
   dictCache.set(key, result);
@@ -91,15 +95,14 @@ function lastSyllable(word) {
   return parts[parts.length - 1];
 }
 
+function pubPlayers(room) {
+  return room.players.map((p) => ({ id: p.id, name: p.name, score: p.score, wins: p.wins }));
+}
+
 function publicRoom(room) {
   return {
     code: room.code,
-    players: room.players.map((p) => ({
-      id: p.id,
-      name: p.name,
-      score: p.score,
-      connected: p.connected
-    })),
+    players: pubPlayers(room).map((p, i) => ({ ...p, connected: room.players[i].connected })),
     started: room.started,
     turnId: room.started ? room.players[room.turnIndex].id : null,
     lastWord: room.lastWord,
@@ -128,7 +131,7 @@ function startTurn(room) {
     lastWord: room.lastWord,
     nextSyllable: room.lastWord ? lastSyllable(room.lastWord) : null,
     deadline: room.deadline,
-    players: room.players.map((p) => ({ id: p.id, name: p.name, score: p.score }))
+    players: pubPlayers(room)
   });
 }
 
@@ -136,10 +139,12 @@ function endGame(room, winnerId, reason) {
   clearTurnTimer(room);
   room.started = false;
   room.deadline = null;
+  const winner = room.players.find((p) => p.id === winnerId);
+  if (winner) winner.wins = (winner.wins || 0) + 1;
   io.to(room.code).emit('game_over', {
     winnerId,
     reason,
-    players: room.players.map((p) => ({ id: p.id, name: p.name, score: p.score })),
+    players: pubPlayers(room),
     history: room.history
   });
 }
@@ -165,7 +170,7 @@ async function validateAndPlay(socket, room, rawWord) {
   const syllables = word.split(' ');
 
   if (syllables.length !== 2) {
-    return socket.emit('invalid_word', { word: rawWord, reason: 'Từ phải có đúng 2 âm tiết (vd: "con mèo")' });
+    return socket.emit('invalid_word', { word: rawWord, reason: 'Từ phải có đúng 2 âm tiết (vd: "con mèo", "xinh đẹp")' });
   }
   if (!/^[\p{L}]+ [\p{L}]+$/u.test(word)) {
     return socket.emit('invalid_word', { word: rawWord, reason: 'Từ chỉ được chứa chữ cái' });
@@ -192,20 +197,21 @@ async function validateAndPlay(socket, room, rawWord) {
   if (!check.exists) {
     return socket.emit('invalid_word', { word: rawWord, reason: `"${word}" không có trong từ điển` });
   }
-  if (!check.isNoun) {
-    return socket.emit('invalid_word', { word: rawWord, reason: `"${word}" không phải danh từ` });
+  if (!check.pos) {
+    return socket.emit('invalid_word', { word: rawWord, reason: `"${word}" không phải danh từ/tính từ` });
   }
 
   // Hợp lệ!
   room.usedWords.add(word);
   room.lastWord = word;
   player.score += 1;
-  room.history.push({ word, playerId: player.id, name: player.name });
+  room.history.push({ word, playerId: player.id, name: player.name, pos: check.pos });
   room.turnIndex = 1 - room.turnIndex;
   io.to(room.code).emit('word_played', {
     word,
+    pos: check.pos,
     playerId: player.id,
-    players: room.players.map((p) => ({ id: p.id, name: p.name, score: p.score }))
+    players: pubPlayers(room)
   });
   startTurn(room);
 }
@@ -218,7 +224,7 @@ io.on('connection', (socket) => {
     const code = genCode();
     const room = {
       code,
-      players: [{ id: socket.id, name: (name || 'Người chơi 1').slice(0, 20), score: 0, connected: true }],
+      players: [{ id: socket.id, name: (name || 'Người chơi 1').slice(0, 20), score: 0, wins: 0, connected: true }],
       started: false,
       turnIndex: 0,
       lastWord: null,
@@ -239,7 +245,7 @@ io.on('connection', (socket) => {
     if (!room) return socket.emit('join_error', { reason: 'Không tìm thấy phòng này!' });
     if (room.players.length >= 2) return socket.emit('join_error', { reason: 'Phòng đã đủ 2 người!' });
 
-    room.players.push({ id: socket.id, name: (name || 'Người chơi 2').slice(0, 20), score: 0, connected: true });
+    room.players.push({ id: socket.id, name: (name || 'Người chơi 2').slice(0, 20), score: 0, wins: 0, connected: true });
     socket.join(code);
     currentRoom = room;
     socket.emit('joined', { code, you: socket.id });
@@ -261,6 +267,25 @@ io.on('connection', (socket) => {
 
   socket.on('typing', ({ text }) => {
     if (currentRoom) socket.to(currentRoom.code).emit('opponent_typing', { text: String(text).slice(0, 40) });
+  });
+
+  socket.on('chat', ({ text }) => {
+    if (!currentRoom) return;
+    const t = String(text || '').slice(0, 200).trim();
+    if (!t) return;
+    const p = currentRoom.players.find((pl) => pl.id === socket.id);
+    io.to(currentRoom.code).emit('chat', {
+      playerId: socket.id,
+      name: p ? p.name : '???',
+      text: t
+    });
+  });
+
+  socket.on('react', ({ emoji }) => {
+    if (!currentRoom) return;
+    const e = String(emoji || '').slice(0, 30);
+    if (!e) return;
+    io.to(currentRoom.code).emit('reaction', { playerId: socket.id, emoji: e });
   });
 
   socket.on('leave_room', () => handleLeave(socket));

@@ -60,10 +60,11 @@ socket.on('game_start', (room) => {
   gameOver = false;
   $('overOverlay').classList.remove('show');
   $('history').innerHTML = '';
-  $('cwLabel').textContent = 'Từ đầu tiên — nhập bất kỳ danh từ 2 âm!';
+  $('cwLabel').textContent = 'Từ đầu tiên — nhập danh từ hoặc tính từ 2 âm!';
   $('sylFirst').textContent = '?';
   $('sylLast').textContent = '?';
   $('cwHint').textContent = '';
+  $('posTag').textContent = '';
   setMsg($('gameMsg'), '');
 
   const me = players.find((p) => p.id === myId);
@@ -98,16 +99,17 @@ socket.on('turn', ({ turnId, lastWord, nextSyllable, deadline: dl, players: ps }
     $('sylLast').textContent = parts[1] || '';
     $('cwHint').textContent = `Nối bằng âm "${nextSyllable}"`;
   } else {
-    $('cwLabel').textContent = 'Từ đầu tiên — nhập bất kỳ danh từ 2 âm!';
+    $('cwLabel').textContent = 'Từ đầu tiên — nhập danh từ hoặc tính từ 2 âm!';
     $('sylFirst').textContent = '?';
     $('sylLast').textContent = '?';
     $('cwHint').textContent = '';
   }
 });
 
-socket.on('word_played', ({ word, playerId, players: ps }) => {
+socket.on('word_played', ({ word, pos, playerId, players: ps }) => {
   if (ps) { players = ps; updateScores(ps); }
   addHistory(word, playerId === myId);
+  if (pos) $('posTag').textContent = `(${pos})`;
 });
 
 socket.on('checking_word', () => {
@@ -137,8 +139,11 @@ socket.on('game_over', ({ winnerId, reason, players: ps }) => {
   $('overReason').textContent = reason;
   const me = ps?.find((p) => p.id === myId);
   const op = ps?.find((p) => p.id !== myId);
-  if (me && op) $('overScore').textContent = `${me.name} ${me.score} — ${op.score} ${op.name}`;
+  if (me && op) {
+    $('overScore').textContent = `${me.name} ${me.score} — ${op.score} ${op.name} · Tổng thắng ${me.wins}–${op.wins}`;
+  }
   $('overOverlay').classList.add('show');
+  if (win) celebrate();
 });
 
 socket.on('opponent_left', () => {
@@ -155,6 +160,91 @@ socket.on('opponent_left', () => {
 socket.on('opponent_typing', ({ text }) => {
   $('opTyping').textContent = text ? `✏️ ${text}` : '';
 });
+
+// ---------- chat ----------
+let unread = 0;
+socket.on('chat', ({ playerId, name, text }) => {
+  const mine = playerId === myId;
+  const box = $('chatMsgs');
+  const el = document.createElement('div');
+  el.className = 'chat-msg ' + (mine ? 'mine' : 'theirs');
+  const who = document.createElement('span');
+  who.className = 'who';
+  who.textContent = mine ? 'Bạn' : name;
+  const body = document.createElement('span');
+  body.textContent = text;
+  el.appendChild(who);
+  el.appendChild(body);
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+  if (!mine && !$('chatPanel').classList.contains('open')) {
+    unread++;
+    $('chatBadge').textContent = unread > 9 ? '9+' : unread;
+    $('chatBadge').classList.add('show');
+  }
+});
+
+function toggleChat(open) {
+  $('chatPanel').classList.toggle('open', open);
+  if (open) { unread = 0; $('chatBadge').classList.remove('show'); $('chatInput').focus(); }
+}
+$('chatFab').onclick = () => toggleChat(!$('chatPanel').classList.contains('open'));
+$('chatClose').onclick = () => toggleChat(false);
+
+function sendChat() {
+  const t = $('chatInput').value.trim();
+  if (!t) return;
+  socket.emit('chat', { text: t });
+  $('chatInput').value = '';
+}
+$('chatSend').onclick = sendChat;
+$('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(); });
+
+// ---------- emoji / meme reaction ----------
+const EMOJIS = ['😂','🤣','😍','😘','😎','🤪','😜','🤯','😱','😭','😢','😡','🤬','😴','🤔','🙄','👍','👎','👏','🙏','🔥','❤️','💯','🎉','⚡','🐸'];
+const KAOMOJI = ['¯\\_(ツ)_/¯', '(╯°□°）╯︵ ┻━┻', 'ಠ_ಠ', '(☞ﾟヮﾟ)☞', '(ᵔᴥᵔ)', 't(-_-t)'];
+
+(function buildPicker() {
+  const pk = $('emojiPicker');
+  [...EMOJIS.map(e => ({ t: e, kao: false })), ...KAOMOJI.map(k => ({ t: k, kao: true }))].forEach(({ t, kao }) => {
+    const b = document.createElement('button');
+    b.textContent = t;
+    if (kao) b.className = 'kaomoji';
+    b.onclick = () => {
+      socket.emit('react', { emoji: t });
+      pk.classList.remove('open');
+    };
+    pk.appendChild(b);
+  });
+})();
+
+$('emojiBtn').onclick = () => $('emojiPicker').classList.toggle('open');
+
+function spawnReaction(emoji, fromMe) {
+  const el = document.createElement('div');
+  const isKao = emoji.length > 4;
+  el.className = 'fly-emoji' + (isKao ? ' kao' : '');
+  el.textContent = emoji;
+  el.style.left = (fromMe ? 55 : 5) + Math.random() * 35 + 'vw';
+  $('reactions').appendChild(el);
+  setTimeout(() => el.remove(), 2700);
+}
+
+socket.on('reaction', ({ playerId, emoji }) => spawnReaction(emoji, playerId === myId));
+
+function celebrate() {
+  const confetti = ['🎉','🏆','✨','🥳','⭐','🎊'];
+  for (let i = 0; i < 14; i++) {
+    setTimeout(() => {
+      const el = document.createElement('div');
+      el.className = 'fly-emoji';
+      el.textContent = confetti[i % confetti.length];
+      el.style.left = Math.random() * 90 + 'vw';
+      $('reactions').appendChild(el);
+      setTimeout(() => el.remove(), 2700);
+    }, i * 90);
+  }
+}
 
 // ---------- input ----------
 function sendWord() {
@@ -180,8 +270,8 @@ $('btnLeave').onclick = () => { socket.emit('leave_room'); location.reload(); };
 function updateScores(ps) {
   const me = ps.find((p) => p.id === myId);
   const op = ps.find((p) => p.id !== myId);
-  if (me) { $('meScore').textContent = me.score; $('meName').textContent = me.name; }
-  if (op) { $('opScore').textContent = op.score; $('opName').textContent = op.name; }
+  if (me) { $('meScore').textContent = me.score; $('meName').textContent = me.name; $('meWins').textContent = '🏆' + (me.wins || 0); }
+  if (op) { $('opScore').textContent = op.score; $('opName').textContent = op.name; $('opWins').textContent = '🏆' + (op.wins || 0); }
 }
 
 function addHistory(word, mine) {

@@ -45,7 +45,7 @@
   <div class="rules card">
     <h3>📖 Luật chơi</h3>
     <ul>
-      <li>Mỗi lượt nhập <b>danh từ 2 âm tiết</b></li>
+      <li>Mỗi lượt nhập <b>danh từ hoặc tính từ 2 âm tiết</b></li>
       <li>Âm đầu = âm cuối của từ trước</li>
       <li>Không được lặp lại từ đã dùng</li>
       <li>Hết <b>30 giây</b> mà chưa trả lời → thua</li>
@@ -73,11 +73,13 @@
     <div class="scoreboard">
       <div class="player me" id="meBox">
         <div class="avatar" id="meAvatar">A</div>
-        <div class="p-info"><span class="p-name" id="meName">Bạn</span><span class="p-score" id="meScore">0</span></div>
+        <div class="p-info"><span class="p-name" id="meName">Bạn</span>
+          <span class="p-score"><span id="meScore">0</span><span class="p-wins" id="meWins">🏆0</span></span></div>
       </div>
       <div class="vs">VS</div>
       <div class="player op" id="opBox">
-        <div class="p-info right"><span class="p-name" id="opName">Đối thủ</span><span class="p-score" id="opScore">0</span></div>
+        <div class="p-info right"><span class="p-name" id="opName">Đối thủ</span>
+          <span class="p-score"><span id="opScore">0</span><span class="p-wins" id="opWins">🏆0</span></span></div>
         <div class="avatar" id="opAvatar">B</div>
       </div>
     </div>
@@ -87,10 +89,11 @@
 
     <!-- từ hiện tại / âm cần nối -->
     <div class="current-word card">
-      <div class="cw-label" id="cwLabel">Từ đầu tiên — nhập bất kỳ danh từ 2 âm!</div>
+      <div class="cw-label" id="cwLabel">Từ đầu tiên — nhập danh từ hoặc tính từ 2 âm!</div>
       <div class="cw-word" id="cwWord">
         <span class="syl" id="sylFirst">?</span><span class="syl syl-hot" id="sylLast">?</span>
       </div>
+      <div id="posTag" class="pos-tag"></div>
       <div class="cw-hint" id="cwHint"></div>
     </div>
 
@@ -105,12 +108,28 @@
 
     <!-- input -->
     <div class="input-row">
-      <input id="wordInput" class="input word-input" placeholder="Nhập danh từ…" autocomplete="off" autocapitalize="off" />
+      <button id="emojiBtn" class="emoji-btn" title="Thả cảm xúc">😀</button>
+      <input id="wordInput" class="input word-input" placeholder="Nhập từ…" autocomplete="off" autocapitalize="off" />
       <button id="btnSend" class="btn btn-primary send-btn">Gửi</button>
     </div>
+    <div id="emojiPicker" class="emoji-picker"></div>
     <p id="gameMsg" class="msg"></p>
     <button id="btnLeave" class="leave-btn">Thoát phòng</button>
   </div>
+
+  <!-- chat -->
+  <button id="chatFab" class="chat-fab">💬<span id="chatBadge" class="chat-badge">0</span></button>
+  <div id="chatPanel" class="chat-panel">
+    <div class="chat-head"><span>💬 Trò chuyện</span><button id="chatClose">✕</button></div>
+    <div id="chatMsgs" class="chat-msgs"></div>
+    <div class="chat-input-row">
+      <input id="chatInput" class="input" maxlength="200" placeholder="Nhắn gì đó…" autocomplete="off" />
+      <button id="chatSend" class="btn btn-primary chat-send">➤</button>
+    </div>
+  </div>
+
+  <!-- reaction bay -->
+  <div id="reactions" class="reactions"></div>
 
   <!-- overlay kết thúc -->
   <div id="overOverlay" class="overlay">

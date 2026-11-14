@@ -40,9 +40,19 @@ a.on('word_played', (d) => log('A', 'word_played', d));
 b.on('word_played', (d) => log('B', 'word_played', d));
 a.on('invalid_word', (d) => log('A', 'invalid_word', d));
 b.on('invalid_word', (d) => log('B', 'invalid_word', d));
+a.on('chat', (d) => log('A', 'chat', d));
+b.on('chat', (d) => { log('B', 'chat', d); });
+a.on('reaction', (d) => log('A', 'reaction', d));
+b.on('reaction', (d) => log('B', 'reaction', d));
 a.on('checking_word', (d) => log('A', 'checking', d));
 b.on('checking_word', (d) => log('B', 'checking', d));
-a.on('game_start', (d) => log('A', 'game_start', { players: d.players.map(p => p.name) }));
+a.on('game_start', (d) => {
+  log('A', 'game_start', { players: d.players.map(p => p.name) });
+  // test chat + react
+  a.emit('chat', { text: 'hello Bảo <script>alert(1)</script>' });
+  b.emit('chat', { text: 'hi An, chơi đi!' });
+  a.emit('react', { emoji: '🔥' });
+});
 a.on('game_over', (d) => { log('A', 'game_over', d); cleanup(); });
 b.on('game_over', (d) => { log('B', 'game_over', d); });
 
