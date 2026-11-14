@@ -106,23 +106,28 @@ body {
 #game { justify-content: flex-start; padding-top: 14px; }
 .game-wrap { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 12px; flex: 1; padding-bottom: 84px; }
 
-.scoreboard { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.player { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-radius: 18px;
-  background: var(--card); border: 2px solid var(--stroke); flex: 1; transition: border-color .3s, box-shadow .3s; }
-.player.op { justify-content: flex-end; }
-.player.my-turn { border-color: var(--yellow); box-shadow: 0 0 18px rgba(255,217,61,.5); }
-.avatar { width: 42px; height: 42px; border-radius: 50%; flex-shrink: 0;
+/* dải người chơi + chip màu theo thứ tự vào phòng */
+.pstrip { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+.wait-list { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 340px; }
+
+.pchip { --pc: var(--cyan); display: flex; align-items: center; gap: 8px; padding: 6px 12px 6px 6px;
+  border-radius: 16px; background: var(--card); border: 2px solid var(--stroke);
+  transition: border-color .3s, box-shadow .3s, opacity .3s, filter .3s; }
+.pchip.c0 { --pc: #22d3ee; } .pchip.c1 { --pc: #ff5e8a; } .pchip.c2 { --pc: #ffd93d; }
+.pchip.c3 { --pc: #9b5cff; } .pchip.c4 { --pc: #4ade80; } .pchip.c5 { --pc: #ff9f43; }
+.pchip.c6 { --pc: #5c8aff; } .pchip.c7 { --pc: #ff6bcb; }
+.pchip.me { border-style: dashed; }
+.pchip.active { border-color: var(--yellow); box-shadow: 0 0 16px rgba(255,217,61,.55); }
+.pchip.out { filter: grayscale(.9) brightness(.65); }
+.pchip.out .pc-name { text-decoration: line-through; }
+.pchip.disc { opacity: .45; }
+.pc-av { position: relative; width: 34px; height: 34px; border-radius: 50%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  font-size: 22px; font-weight: 800; color: var(--dark); background: var(--cyan); }
-.player.op .avatar { background: var(--pink); }
-.p-info { display: flex; flex-direction: column; line-height: 1.15; }
-.p-info.right { text-align: right; }
-.p-name { font-weight: 700; font-size: 15px; max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.p-score { font-size: 24px; font-weight: 800; color: var(--yellow); display: flex; align-items: center; gap: 8px; }
-.p-info.right .p-score { justify-content: flex-end; }
-.p-wins { font-size: 13px; font-weight: 700; color: rgba(255,255,255,.8);
-  background: rgba(255,255,255,.12); padding: 2px 8px; border-radius: 10px; }
-.vs { font-weight: 800; font-size: 18px; opacity: .7; }
+  font-size: 18px; font-weight: 800; color: var(--dark); background: var(--pc); }
+.pchip.out .pc-av::after { content: '💀'; position: absolute; font-size: 12px; margin: -26px 0 0 24px; }
+.pc-info { display: flex; flex-direction: column; line-height: 1.15; }
+.pc-name { font-weight: 700; font-size: 13px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pc-score { font-size: 12px; font-weight: 700; color: var(--yellow); opacity: .95; }
 
 .timer-wrap { height: 12px; border-radius: 8px; background: rgba(255,255,255,.12); overflow: hidden; }
 .timer-bar { height: 100%; width: 100%; border-radius: 8px;
@@ -145,9 +150,11 @@ body {
 .history { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center;
   padding: 8px; overflow-y: auto; max-height: 32vh; }
 .h-word { display: flex; align-items: center; gap: 6px; animation: slideIn .3s ease both; }
-.h-chip { padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 16px; }
-.h-chip.mine { background: rgba(34,211,238,.28); border: 1px solid var(--cyan); }
-.h-chip.theirs { background: rgba(255,94,138,.28); border: 1px solid var(--pink); }
+.h-chip { --pc: var(--cyan); padding: 6px 14px; border-radius: 20px; font-weight: 700; font-size: 16px;
+  background: color-mix(in srgb, var(--pc) 25%, transparent); border: 1px solid var(--pc); }
+.h-chip.c0 { --pc: #22d3ee; } .h-chip.c1 { --pc: #ff5e8a; } .h-chip.c2 { --pc: #ffd93d; }
+.h-chip.c3 { --pc: #9b5cff; } .h-chip.c4 { --pc: #4ade80; } .h-chip.c5 { --pc: #ff9f43; }
+.h-chip.c6 { --pc: #5c8aff; } .h-chip.c7 { --pc: #ff6bcb; }
 .h-arrow { opacity: .5; font-weight: 800; }
 @keyframes slideIn { from { transform: translateY(14px) scale(.8); opacity: 0; } }
 
@@ -228,7 +235,13 @@ body {
   display: flex; flex-direction: column; gap: 14px; animation: slideIn .35s ease both; }
 .over-emoji { font-size: 64px; }
 .over-card h2 { font-size: 34px; }
-.over-score { font-size: 20px; font-weight: 700; color: var(--yellow); }
+.over-score { font-size: 15px; font-weight: 700; color: var(--yellow); }
+.over-score div { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.ov-chip { --pc: var(--cyan); padding: 3px 10px; border-radius: 12px;
+  background: color-mix(in srgb, var(--pc) 22%, transparent); border: 1px solid var(--pc); color: #fff; }
+.ov-chip.c0 { --pc: #22d3ee; } .ov-chip.c1 { --pc: #ff5e8a; } .ov-chip.c2 { --pc: #ffd93d; }
+.ov-chip.c3 { --pc: #9b5cff; } .ov-chip.c4 { --pc: #4ade80; } .ov-chip.c5 { --pc: #ff9f43; }
+.ov-chip.c6 { --pc: #5c8aff; } .ov-chip.c7 { --pc: #ff6bcb; }
 
 /* ---------- desktop ---------- */
 @media (min-width: 768px) {

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Nối Chữ — Game 2 Người</title>
+<title>Nối Chữ — Game Nhóm</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -26,7 +26,7 @@
       <span class="logo-word w1">NỐI</span>
       <span class="logo-word w2">CHỮ</span>
     </div>
-    <p class="tagline">Đấu trí danh từ — 2 người chơi</p>
+    <p class="tagline">Đấu trí từ vựng — 2 đến 8 người chơi</p>
 
     <input id="nameInput" class="input" maxlength="20" placeholder="Tên của bạn" autocomplete="off" />
 
@@ -45,11 +45,12 @@
   <div class="rules card">
     <h3>📖 Luật chơi</h3>
     <ul>
-      <li>Mỗi lượt nhập <b>danh từ hoặc tính từ 2 âm tiết</b></li>
+      <li>Chơi <b>2–8 người</b>, nối từ theo lượt vòng tròn</li>
+      <li>Mỗi lượt nhập <b>từ tiếng Việt 2 âm tiết có nghĩa</b></li>
       <li>Âm đầu = âm cuối của từ trước</li>
       <li>Không được lặp lại từ đã dùng</li>
-      <li>Hết <b>30 giây</b> mà chưa trả lời → thua</li>
-      <li>Từ được kiểm tra tự động qua từ điển Wiktionary</li>
+      <li>Hết <b>30 giây</b> hoặc thoát → <b>bị loại</b>, vẫn xem được nhưng không chat được</li>
+      <li><b>Người cuối cùng còn lại thắng!</b></li>
     </ul>
   </div>
 </section>
@@ -58,10 +59,11 @@
 <section id="waiting" class="screen">
   <div class="card lobby-card">
     <h2>Phòng <span id="roomCode" class="room-code"></span></h2>
-    <p>Gửi mã này cho bạn bè để vào chơi!</p>
+    <p>Gửi mã này cho bạn bè để vào chơi! (tối đa 8 người)</p>
     <button id="btnCopy" class="btn btn-secondary">📋 Sao chép mã</button>
-    <div class="loader"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-    <p class="msg">Đang chờ người chơi thứ 2…</p>
+    <div id="waitPlayers" class="wait-list"></div>
+    <button id="btnStart" class="btn btn-primary" style="display:none">🎮 Bắt đầu</button>
+    <p id="waitMsg" class="msg">Đang chờ thêm người chơi…</p>
   </div>
 </section>
 
@@ -69,20 +71,8 @@
 <section id="game" class="screen">
   <div class="game-wrap">
 
-    <!-- scoreboard -->
-    <div class="scoreboard">
-      <div class="player me" id="meBox">
-        <div class="avatar" id="meAvatar">A</div>
-        <div class="p-info"><span class="p-name" id="meName">Bạn</span>
-          <span class="p-score"><span id="meScore">0</span><span class="p-wins" id="meWins">🏆0</span></span></div>
-      </div>
-      <div class="vs">VS</div>
-      <div class="player op" id="opBox">
-        <div class="p-info right"><span class="p-name" id="opName">Đối thủ</span>
-          <span class="p-score"><span id="opScore">0</span><span class="p-wins" id="opWins">🏆0</span></span></div>
-        <div class="avatar" id="opAvatar">B</div>
-      </div>
-    </div>
+    <!-- danh sách người chơi -->
+    <div class="pstrip" id="pstrip"></div>
 
     <!-- timer -->
     <div class="timer-wrap"><div id="timerBar" class="timer-bar"></div></div>
@@ -103,7 +93,7 @@
     <!-- typing + status -->
     <div class="status-line">
       <span id="turnText">Đợi…</span>
-      <span id="opTyping" class="op-typing"></span>
+      <span id="typingLine" class="op-typing"></span>
     </div>
 
     <!-- input -->

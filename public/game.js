@@ -6,11 +6,15 @@ const TURN_SECONDS = 30;
 let myId = null;
 let roomCode = null;
 let players = [];
+let hostId = null;
+let turnId = null;
 let myTurn = false;
 let deadline = null;
 let timerInt = null;
 let typingTimer = null;
+let typingClearTimer = null;
 let gameOver = false;
+let inGame = false;
 
 // ---------- helpers ----------
 function show(screenId) {
@@ -20,6 +24,8 @@ function show(screenId) {
 
 function setMsg(el, text) { el.textContent = text || ''; }
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+const me = () => players.find((p) => p.id === myId);
+const pIndex = (id) => Math.max(0, players.findIndex((p) => p.id === id));
 
 function shake(el) {
   el.style.animation = 'none';
@@ -45,7 +51,11 @@ socket.on('room_created', ({ code, you }) => {
   $('roomCode').textContent = code;
   show('waiting');
 });
-socket.on('joined', ({ code, you }) => { myId = you; roomCode = code; });
+socket.on('joined', ({ code, you }) => {
+  myId = you; roomCode = code;
+  $('roomCode').textContent = code;
+  if (!inGame) show('waiting');
+});
 socket.on('join_error', ({ reason }) => { setMsg($('lobbyMsg'), reason); shake($('codeInput')); });
 
 $('btnCopy').onclick = async () => {
@@ -54,43 +64,110 @@ $('btnCopy').onclick = async () => {
   setTimeout(() => ($('btnCopy').textContent = '📋 Sao chép mã'), 1500);
 };
 
+$('btnStart').onclick = () => socket.emit('start_game');
+
+// ---------- phòng chờ ----------
+function makeChip(p, i) {
+  const chip = document.createElement('div');
+  chip.className = 'pchip c' + (i % 8);
+  if (p.id === myId) chip.classList.add('me');
+  if (!p.alive) chip.classList.add('out');
+  if (!p.connected) chip.classList.add('disc');
+
+  const av = document.createElement('div');
+  av.className = 'pc-av';
+  av.textContent = cap((p.name || '?')[0]);
+
+  const info = document.createElement('div');
+  info.className = 'pc-info';
+  const nm = document.createElement('span');
+  nm.className = 'pc-name';
+  nm.textContent = p.name + (p.id === myId ? ' (bạn)' : '') + (p.id === hostId ? ' 👑' : '');
+  const sc = document.createElement('span');
+  sc.className = 'pc-score';
+  sc.textContent = `${p.score} điểm · 🏆${p.wins || 0}`;
+  info.appendChild(nm);
+  info.appendChild(sc);
+  chip.appendChild(av);
+  chip.appendChild(info);
+  return chip;
+}
+
+function renderStrip() {
+  const strip = $('pstrip');
+  strip.innerHTML = '';
+  players.forEach((p, i) => {
+    const chip = makeChip(p, i);
+    if (p.id === turnId && p.alive) chip.classList.add('active');
+    strip.appendChild(chip);
+  });
+}
+
+socket.on('room_update', (room) => {
+  players = room.players;
+  hostId = room.hostId;
+  if (room.started) { if (inGame) renderStrip(); return; }
+
+  // đang ở phòng chờ
+  const list = $('waitPlayers');
+  list.innerHTML = '';
+  players.forEach((p, i) => list.appendChild(makeChip(p, i)));
+
+  const connected = players.filter((p) => p.connected).length;
+  const amHost = myId === hostId;
+  $('btnStart').style.display = amHost ? '' : 'none';
+  $('btnStart').disabled = connected < 2;
+  $('btnStart').textContent = connected < 2 ? '🎮 Cần ít nhất 2 người' : `🎮 Bắt đầu (${connected} người)`;
+  $('waitMsg').textContent = amHost
+    ? (connected < 2 ? 'Đang chờ thêm người chơi…' : 'Đủ người rồi, bấm bắt đầu!')
+    : 'Đợi chủ phòng bắt đầu…';
+});
+
 // ---------- game ----------
 socket.on('game_start', (room) => {
   players = room.players;
+  hostId = room.hostId;
+  inGame = true;
   gameOver = false;
+  turnId = null;
   $('overOverlay').classList.remove('show');
   $('history').innerHTML = '';
-  $('cwLabel').textContent = 'Từ đầu tiên — nhập danh từ hoặc tính từ 2 âm!';
+  $('cwLabel').textContent = 'Từ đầu tiên — nhập từ 2 âm tiết có nghĩa!';
   $('sylFirst').textContent = '?';
   $('sylLast').textContent = '?';
   $('cwHint').textContent = '';
   $('posTag').textContent = '';
+  $('typingLine').textContent = '';
+  $('btnRematch').style.display = '';
   setMsg($('gameMsg'), '');
 
-  const me = players.find((p) => p.id === myId);
-  const op = players.find((p) => p.id !== myId);
-  $('meName').textContent = me ? me.name : 'Bạn';
-  $('opName').textContent = op ? op.name : 'Đối thủ';
-  $('meAvatar').textContent = cap(($('meName').textContent || 'A')[0]);
-  $('opAvatar').textContent = cap(($('opName').textContent || 'B')[0]);
-  updateScores(players);
+  renderStrip();
+  (room.history || []).forEach((h) => addHistory(h.word, h.playerId));
   show('game');
-  $('wordInput').focus();
+  if (me()?.alive) $('wordInput').focus();
 });
 
-socket.on('turn', ({ turnId, lastWord, nextSyllable, deadline: dl, players: ps }) => {
-  if (ps) { players = ps; updateScores(ps); }
-  myTurn = turnId === myId;
+socket.on('turn', ({ turnId: tid, lastWord, nextSyllable, deadline: dl, players: ps }) => {
+  if (ps) { players = ps; }
+  turnId = tid;
+  const m = me();
+  const out = m && !m.alive;
+  myTurn = tid === myId && !out;
   deadline = dl;
   startCountdown();
 
-  $('meBox').classList.toggle('my-turn', myTurn);
-  $('opBox').classList.toggle('my-turn', !myTurn);
-  $('turnText').textContent = myTurn ? '🎯 Đến lượt BẠN!' : '⏳ Lượt đối thủ…';
-  $('turnText').style.color = myTurn ? 'var(--yellow)' : 'rgba(255,255,255,.75)';
+  renderStrip();
+  const cur = players.find((p) => p.id === tid);
+  if (out) {
+    $('turnText').textContent = `💀 Bạn đã bị loại — lượt của ${cur ? cur.name : '…'}`;
+    $('turnText').style.color = 'rgba(255,255,255,.6)';
+  } else {
+    $('turnText').textContent = myTurn ? '🎯 Đến lượt BẠN!' : `⏳ Lượt của ${cur ? cur.name : '…'}`;
+    $('turnText').style.color = myTurn ? 'var(--yellow)' : 'rgba(255,255,255,.75)';
+  }
   $('wordInput').disabled = !myTurn;
   $('btnSend').disabled = !myTurn;
-  if (myTurn) { $('wordInput').focus(); $('wordInput').placeholder = nextSyllable ? `Bắt đầu bằng "${nextSyllable}…"` : 'Nhập danh từ…'; }
+  if (myTurn) { $('wordInput').focus(); $('wordInput').placeholder = nextSyllable ? `Bắt đầu bằng "${nextSyllable}…"` : 'Nhập từ…'; }
 
   if (lastWord) {
     const parts = lastWord.split(' ');
@@ -99,7 +176,7 @@ socket.on('turn', ({ turnId, lastWord, nextSyllable, deadline: dl, players: ps }
     $('sylLast').textContent = parts[1] || '';
     $('cwHint').textContent = `Nối bằng âm "${nextSyllable}"`;
   } else {
-    $('cwLabel').textContent = 'Từ đầu tiên — nhập danh từ hoặc tính từ 2 âm!';
+    $('cwLabel').textContent = 'Từ đầu tiên — nhập từ 2 âm tiết có nghĩa!';
     $('sylFirst').textContent = '?';
     $('sylLast').textContent = '?';
     $('cwHint').textContent = '';
@@ -107,9 +184,23 @@ socket.on('turn', ({ turnId, lastWord, nextSyllable, deadline: dl, players: ps }
 });
 
 socket.on('word_played', ({ word, pos, playerId, players: ps }) => {
-  if (ps) { players = ps; updateScores(ps); }
-  addHistory(word, playerId === myId);
-  if (pos) $('posTag').textContent = `(${pos})`;
+  if (ps) { players = ps; }
+  addHistory(word, playerId);
+  $('posTag').textContent = pos ? `(${pos})` : '';
+  setMsg($('gameMsg'), '');
+});
+
+socket.on('player_out', ({ playerId, name, reason, players: ps }) => {
+  if (ps) { players = ps; }
+  renderStrip();
+  setMsg($('gameMsg'), `💀 ${name} bị loại — ${reason}`);
+  $('gameMsg').style.color = 'rgba(255,255,255,.75)';
+  if (playerId === myId) {
+    myTurn = false;
+    $('wordInput').disabled = true;
+    $('btnSend').disabled = true;
+    $('wordInput').placeholder = 'Bạn đã bị loại — chỉ xem được thôi';
+  }
 });
 
 socket.on('checking_word', () => {
@@ -124,41 +215,44 @@ socket.on('invalid_word', ({ reason }) => {
   if (myTurn) { $('wordInput').select(); $('wordInput').focus(); }
 });
 
-socket.on('game_over', ({ winnerId, reason, players: ps }) => {
+socket.on('notice', ({ reason }) => {
+  setMsg($('gameMsg'), '⚠️ ' + reason);
+  $('gameMsg').style.color = 'var(--yellow)';
+});
+
+socket.on('game_over', ({ winnerId, winnerName, reason, players: ps }) => {
   gameOver = true;
   myTurn = false;
   stopCountdown();
   $('timerBar').style.width = '0%';
   $('wordInput').disabled = true;
   $('btnSend').disabled = true;
-  if (ps) updateScores(ps);
+  if (ps) { players = ps; renderStrip(); }
 
   const win = winnerId === myId;
-  $('overEmoji').textContent = win ? '🏆' : '😢';
-  $('overTitle').textContent = win ? 'Bạn thắng!' : 'Bạn thua!';
+  $('overEmoji').textContent = win ? '🏆' : (winnerId ? '🎉' : '😶');
+  $('overTitle').textContent = win ? 'Bạn thắng!' : (winnerName ? `${winnerName} thắng!` : 'Ván đấu kết thúc');
   $('overReason').textContent = reason;
-  const me = ps?.find((p) => p.id === myId);
-  const op = ps?.find((p) => p.id !== myId);
-  if (me && op) {
-    $('overScore').textContent = `${me.name} ${me.score} — ${op.score} ${op.name} · Tổng thắng ${me.wins}–${op.wins}`;
-  }
+
+  const sc = $('overScore');
+  sc.innerHTML = '';
+  const line = document.createElement('div');
+  [...(ps || [])].sort((a, b) => b.score - a.score).forEach((p, i) => {
+    const s = document.createElement('span');
+    s.className = 'ov-chip c' + (pIndex(p.id) % 8);
+    s.textContent = `${i + 1}. ${p.name} · ${p.score}`;
+    line.appendChild(s);
+  });
+  sc.appendChild(line);
   $('overOverlay').classList.add('show');
   if (win) celebrate();
 });
 
-socket.on('opponent_left', () => {
-  gameOver = true;
-  stopCountdown();
-  $('overEmoji').textContent = '🚪';
-  $('overTitle').textContent = 'Đối thủ đã thoát';
-  $('overReason').textContent = 'Phòng đã đóng. Quay về sảnh để chơi tiếp.';
-  $('overScore').textContent = '';
-  $('btnRematch').style.display = 'none';
-  $('overOverlay').classList.add('show');
-});
-
-socket.on('opponent_typing', ({ text }) => {
-  $('opTyping').textContent = text ? `✏️ ${text}` : '';
+socket.on('player_typing', ({ playerId, name, text }) => {
+  if (playerId === myId) return;
+  $('typingLine').textContent = text ? `✏️ ${name}: ${text}` : '';
+  if (typingClearTimer) clearTimeout(typingClearTimer);
+  typingClearTimer = setTimeout(() => { $('typingLine').textContent = ''; }, 2500);
 });
 
 // ---------- chat ----------
@@ -262,19 +356,12 @@ $('wordInput').addEventListener('input', (e) => {
   typingTimer = setTimeout(() => socket.emit('typing', { text: '' }), 1500);
 });
 
-$('btnRematch').onclick = () => { $('btnRematch').style.display = ''; socket.emit('rematch'); };
-$('btnExit').onclick = () => { $('btnRematch').style.display = ''; location.reload(); };
+$('btnRematch').onclick = () => { socket.emit('rematch'); };
+$('btnExit').onclick = () => { socket.emit('leave_room'); location.reload(); };
 $('btnLeave').onclick = () => { socket.emit('leave_room'); location.reload(); };
 
 // ---------- render helpers ----------
-function updateScores(ps) {
-  const me = ps.find((p) => p.id === myId);
-  const op = ps.find((p) => p.id !== myId);
-  if (me) { $('meScore').textContent = me.score; $('meName').textContent = me.name; $('meWins').textContent = '🏆' + (me.wins || 0); }
-  if (op) { $('opScore').textContent = op.score; $('opName').textContent = op.name; $('opWins').textContent = '🏆' + (op.wins || 0); }
-}
-
-function addHistory(word, mine) {
+function addHistory(word, playerId) {
   const hist = $('history');
   if (hist.children.length > 0) {
     const arrow = document.createElement('span');
@@ -285,8 +372,9 @@ function addHistory(word, mine) {
   const wrap = document.createElement('span');
   wrap.className = 'h-word';
   const chip = document.createElement('span');
-  chip.className = 'h-chip ' + (mine ? 'mine' : 'theirs');
+  chip.className = 'h-chip c' + (pIndex(playerId) % 8);
   chip.textContent = word;
+  chip.title = players[pIndex(playerId)]?.name || '';
   wrap.appendChild(chip);
   hist.appendChild(wrap);
   hist.scrollTop = hist.scrollHeight;
