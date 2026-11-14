@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Nối Chữ — Game 2 Người</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<!-- nền động -->
+<div class="bg">
+  <div class="blob b1"></div>
+  <div class="blob b2"></div>
+  <div class="blob b3"></div>
+  <div class="blob b4"></div>
+</div>
+
+<!-- ================= LOBBY ================= -->
+<section id="lobby" class="screen active">
+  <div class="card lobby-card">
+    <div class="logo">
+      <span class="logo-word w1">NỐI</span>
+      <span class="logo-word w2">CHỮ</span>
+    </div>
+    <p class="tagline">Đấu trí danh từ — 2 người chơi</p>
+
+    <input id="nameInput" class="input" maxlength="20" placeholder="Tên của bạn" autocomplete="off" />
+
+    <button id="btnCreate" class="btn btn-primary">🎲 Tạo phòng mới</button>
+
+    <div class="divider"><span>hoặc</span></div>
+
+    <div class="join-row">
+      <input id="codeInput" class="input code-input" maxlength="4" placeholder="MÃ PHÒNG" autocomplete="off" />
+      <button id="btnJoin" class="btn btn-secondary">Vào ➜</button>
+    </div>
+
+    <p id="lobbyMsg" class="msg"></p>
+  </div>
+
+  <div class="rules card">
+    <h3>📖 Luật chơi</h3>
+    <ul>
+      <li>Mỗi lượt nhập <b>danh từ 2 âm tiết</b></li>
+      <li>Âm đầu = âm cuối của từ trước</li>
+      <li>Không được lặp lại từ đã dùng</li>
+      <li>Hết <b>30 giây</b> mà chưa trả lời → thua</li>
+      <li>Từ được kiểm tra tự động qua từ điển Wiktionary</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ================= WAITING ================= -->
+<section id="waiting" class="screen">
+  <div class="card lobby-card">
+    <h2>Phòng <span id="roomCode" class="room-code"></span></h2>
+    <p>Gửi mã này cho bạn bè để vào chơi!</p>
+    <button id="btnCopy" class="btn btn-secondary">📋 Sao chép mã</button>
+    <div class="loader"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    <p class="msg">Đang chờ người chơi thứ 2…</p>
+  </div>
+</section>
+
+<!-- ================= GAME ================= -->
+<section id="game" class="screen">
+  <div class="game-wrap">
+
+    <!-- scoreboard -->
+    <div class="scoreboard">
+      <div class="player me" id="meBox">
+        <div class="avatar" id="meAvatar">A</div>
+        <div class="p-info"><span class="p-name" id="meName">Bạn</span><span class="p-score" id="meScore">0</span></div>
+      </div>
+      <div class="vs">VS</div>
+      <div class="player op" id="opBox">
+        <div class="p-info right"><span class="p-name" id="opName">Đối thủ</span><span class="p-score" id="opScore">0</span></div>
+        <div class="avatar" id="opAvatar">B</div>
+      </div>
+    </div>
+
+    <!-- timer -->
+    <div class="timer-wrap"><div id="timerBar" class="timer-bar"></div></div>
+
+    <!-- từ hiện tại / âm cần nối -->
+    <div class="current-word card">
+      <div class="cw-label" id="cwLabel">Từ đầu tiên — nhập bất kỳ danh từ 2 âm!</div>
+      <div class="cw-word" id="cwWord">
+        <span class="syl" id="sylFirst">?</span><span class="syl syl-hot" id="sylLast">?</span>
+      </div>
+      <div class="cw-hint" id="cwHint"></div>
+    </div>
+
+    <!-- lịch sử chuỗi từ -->
+    <div class="history" id="history"></div>
+
+    <!-- typing + status -->
+    <div class="status-line">
+      <span id="turnText">Đợi…</span>
+      <span id="opTyping" class="op-typing"></span>
+    </div>
+
+    <!-- input -->
+    <div class="input-row">
+      <input id="wordInput" class="input word-input" placeholder="Nhập danh từ…" autocomplete="off" autocapitalize="off" />
+      <button id="btnSend" class="btn btn-primary send-btn">Gửi</button>
+    </div>
+    <p id="gameMsg" class="msg"></p>
+    <button id="btnLeave" class="leave-btn">Thoát phòng</button>
+  </div>
+
+  <!-- overlay kết thúc -->
+  <div id="overOverlay" class="overlay">
+    <div class="card over-card">
+      <div id="overEmoji" class="over-emoji">🏆</div>
+      <h2 id="overTitle">Thắng!</h2>
+      <p id="overReason"></p>
+      <div id="overScore" class="over-score"></div>
+      <button id="btnRematch" class="btn btn-primary">🔄 Chơi lại</button>
+      <button id="btnExit" class="btn btn-secondary">Về sảnh</button>
+    </div>
+  </div>
+</section>
+
+<script src="/socket.io/socket.io.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
